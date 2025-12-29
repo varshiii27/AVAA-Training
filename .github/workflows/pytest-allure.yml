@@ -31,7 +31,7 @@ jobs:
           fi
 
       - name: Run Selenium tests with pytest (Allure results)
-        run: pytest --alluredir=allure-results
+        run: pytest test_google_search.py --alluredir=allure-results
         continue-on-error: true
 
       - name: Add Allure executor info
