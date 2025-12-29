@@ -1,0 +1,69 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+import time
+
+def main():
+    # Setup Chrome options for headless execution (for GitHub CI compatibility)
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+
+    # Initialize WebDriver
+    driver = webdriver.Chrome(options=chrome_options)
+
+    try:
+        # Step 1: Navigate to Google
+        driver.get('https://www.google.com')
+        time.sleep(2)  # Wait for page to load
+
+        # Accept cookies if the consent form appears (for EU users)
+        try:
+            consent_button = driver.find_element(By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all')]")
+            consent_button.click()
+            time.sleep(1)
+        except NoSuchElementException:
+            pass  # Consent form did not appear
+
+        # Step 2: Find the search box and enter 'selenium'
+        search_box = driver.find_element(By.NAME, 'q')
+        search_box.clear()
+        search_box.send_keys('selenium')
+        search_box.send_keys(Keys.RETURN)
+        time.sleep(2)  # Wait for search results to load
+
+        # Step 3: Extract the first ten result URLs
+        results = driver.find_elements(By.XPATH, "//div[@class='g']//a")  # Google result links
+        urls = []
+        for result in results:
+            href = result.get_attribute('href')
+            if href and href.startswith('http'):
+                urls.append(href)
+            if len(urls) == 10:
+                break
+
+        # Step 4: Print the first ten URLs
+        print("First ten URLs from Google search for 'selenium':")
+        for idx, url in enumerate(urls, 1):
+            print(f"{idx}: {url}")
+
+        # Step 5: Assertions
+        assert len(urls) == 10, f"Expected 10 URLs, but found {len(urls)}"
+        for url in urls:
+            assert url.startswith('http'), f"URL does not start with http: {url}"
+
+    except (NoSuchElementException, TimeoutException) as e:
+        print(f"An element was not found or a timeout occurred: {e}")
+    except AssertionError as ae:
+        print(f"Assertion failed: {ae}")
+    except Exception as ex:
+        print(f"An unexpected error occurred: {ex}")
+    finally:
+        # Cleanup: Close the browser
+        driver.quit()
+
+if __name__ == "__main__":
+    main()
