@@ -1,94 +1,84 @@
-name: Selenium Tests with Allure Report
- 
+name: Selenium Allure Workflow
+
 on:
   push:
     branches:
       - main
   workflow_dispatch:
- 
-permissions:
-  contents: write
- 
+
 jobs:
   selenium-tests:
-    name: Selenium Test Job
     runs-on: ubuntu-latest
- 
+    name: selenium-tests
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
- 
-      - name: Set up Python
+
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
- 
-      - name: Install Dependencies
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies
         run: |
-          pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
             pip install selenium webdriver-manager pytest allure-pytest
           fi
- 
-      - name: Run Selenium Tests (Generate Allure Results)
-        run: |
-          pytest test_google_search.py --alluredir=allure-results
+
+      - name: Run Selenium tests with pytest (Allure results)
+        run: pytest --alluredir=allure-results
         continue-on-error: true
- 
-      - name: Add Allure Executor Info
+
+      - name: Add Allure executor info
         run: |
           mkdir -p allure-results
-          cat <<EOF > allure-results/executor.json
-          {
-            "name": "GitHub Actions",
+          echo '{
+            "name": "${{ github.workflow }}",
             "type": "github",
-            "buildName": "${{ github.workflow }}",
+            "buildName": "${{ github.run_number }}",
             "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-          EOF
- 
-      - name: Install Allure CLI
+          }' > allure-results/executor.json
+
+      - name: Install Allure CLI v2.27.0
         run: |
-          sudo apt-get update
-          sudo apt-get install -y default-jre
-          curl -Ls https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz | sudo tar -xz -C /opt
-          sudo ln -sf /opt/allure-2.27.0/bin/allure /usr/bin/allure
- 
-      - name: Generate Allure Report
-        run: |
-          allure generate allure-results --clean -o allure-report
-      - name: Prepare Allure Report for GitHub Pages
-        run: |
-          touch allure-report/.nojekyll
-          ls -la allure-report
- 
- 
-      - name: Upload Allure Report Artifact
-        if: always()
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          tar -xzf allure-2.27.0.tgz
+          sudo mv allure-2.27.0/bin/allure /usr/bin/allure
+
+      - name: Generate Allure report
+        run: allure generate allure-results --clean -o allure-report
+
+      - name: Prepare Allure report for GitHub Pages
+        run: touch allure-report/.nojekyll
+
+      - name: Upload Allure report artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
           path: allure-report
- 
-      - name: Upload Screenshots
-        if: always()
+
+      - name: Upload screenshots artifact (if any)
         uses: actions/upload-artifact@v4
         with:
-          name: selenium-screenshots
-          path: screenshots/
-      - name: Ensure Allure Report Exists
+          name: screenshots
+          path: screenshots
+        if: ${{ exists('screenshots') }}
+
+      - name: Ensure Allure report exists
         run: |
-           mkdir -p allure-report
-           allure generate allure-results --clean -o allure-report
-           test -f allure-report/index.html || (echo "❌ Allure report not generated" && exit 1)
- 
- 
-      - name: Deploy Allure Report to GitHub Pages
-        if: always()
+          if [ ! -f allure-report/index.html ]; then
+            echo "Allure report index.html not found!"
+            exit 1
+          fi
+
+      - name: Deploy Allure report to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
           publish_dir: allure-report
+          publish_branch: gh-pages
