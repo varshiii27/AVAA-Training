@@ -1,44 +1,57 @@
-name: Pytest and Allure Workflow
+name: Run Pytest with Allure Report
+
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      ALLURE_RESULTS_DIR: allure-results
-      SCREENSHOTS_DIR: screenshots
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: "3.10"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest allure-pytest
+          pip install pytest selenium allure-pytest
 
-      - name: Run tests with Pytest
-        run: pytest test_python_script_pytest2.py --alluredir=${{ env.ALLURE_RESULTS_DIR }}
+      - name: Setup Google Chrome
+        uses: browser-actions/setup-chrome@v1
 
-      - name: Upload Allure results
+      - name: Run Specific Test File with Allure
+        run: |
+          pytest test_python_script_pytest2.py --alluredir=allure-results
+
+      - name: Generate Allure HTML Report
+        uses: simple-elf/allure-report-action@v1
+        with:
+          allure_results: allure-results
+          allure_report: allure-report
+          allure_history: allure-history
+
+      - name: Upload Allure Results
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
-          path: ${{ env.ALLURE_RESULTS_DIR }}
+          path: allure-results
 
-      - name: Upload screenshots
-        if: success() || failure()
+      - name: Upload Allure HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+
+      - name: Upload Screenshots (if any)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
-          path: ${{ env.SCREENSHOTS_DIR }}
+          path: screenshots
+          if-no-files-found: ignore
