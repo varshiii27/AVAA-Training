@@ -1,62 +1,75 @@
-import time
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import WebDriverException, NoSuchElementException
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import sys
 
 def main():
-    # Configure Chrome options for headless mode (for CI/CD compatibility)
+    # Setup Chrome options for headless execution (for GitHub CI compatibility)
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--disable-dev-shm-usage')
 
-    # Initialize WebDriver
+    driver = None
     try:
+        # Initialize the Chrome WebDriver
         driver = webdriver.Chrome(options=chrome_options)
-    except WebDriverException as e:
-        print(f"Error initializing Chrome WebDriver: {e}")
-        return
+        wait = WebDriverWait(driver, 10)
 
-    try:
-        # Open Google
-        driver.get("https://www.google.com")
-        time.sleep(2)  # Wait for the page to load
+        # Step 1: Open Google
+        driver.get('https://www.google.com')
+        assert 'Google' in driver.title, 'Google homepage did not load properly.'
 
-        # Accept cookies if the consent form appears (for EU users)
+        # Step 2: Find the search box and search for 'selenium'
         try:
-            consent_button = driver.find_element(By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all')]")
-            consent_button.click()
-            time.sleep(1)
-        except NoSuchElementException:
-            pass  # Consent form did not appear
+            search_box = wait.until(EC.presence_of_element_located((By.NAME, 'q')))
+        except TimeoutException:
+            raise Exception('Search box not found on Google homepage.')
+        search_box.send_keys('selenium')
+        search_box.send_keys(Keys.RETURN)
 
-        # Find the search box, enter 'selenium', and submit
-        search_box = driver.find_element(By.NAME, "q")
-        search_box.send_keys("selenium")
-        search_box.submit()
-        time.sleep(2)  # Wait for results to load
+        # Step 3: Wait for search results to load
+        try:
+            results = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.g')))
+        except TimeoutException:
+            raise Exception('Search results did not load in time.')
 
-        # Extract the first ten result URLs
-        results = driver.find_elements(By.XPATH, "//div[@class='g']//a[@href]")
+        # Step 4: Extract and print the first ten result URLs
         urls = []
         for result in results:
-            href = result.get_attribute("href")
-            if href and href.startswith("http"):
-                urls.append(href)
-            if len(urls) == 10:
-                break
+            try:
+                link = result.find_element(By.CSS_SELECTOR, 'a')
+                url = link.get_attribute('href')
+                if url and url.startswith('http'):
+                    urls.append(url)
+                if len(urls) == 10:
+                    break
+            except NoSuchElementException:
+                continue
 
-        # Print the URLs
-        print("First ten Google search result URLs for 'selenium':")
-        for url in urls:
-            print(url)
+        # Assertion: Ensure we have at least 10 results
+        assert len(urls) == 10, f'Expected 10 results, but got {len(urls)}.'
 
+        print('First ten Google search result URLs for "selenium":')
+        for i, url in enumerate(urls, 1):
+            print(f'{i}: {url}')
+
+    except AssertionError as ae:
+        print(f'Assertion failed: {ae}')
+        sys.exit(1)
     except Exception as e:
-        print(f"An error occurred during the search: {e}")
+        print(f'Error: {e}')
+        sys.exit(1)
     finally:
         # Ensure the WebDriver is properly closed
-        driver.quit()
+        if driver:
+            driver.quit()
 
 if __name__ == "__main__":
     main()
