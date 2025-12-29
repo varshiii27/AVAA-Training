@@ -7,81 +7,83 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import sys
 
+SEARCH_TERM = "selenium"
+GOOGLE_URL = "https://www.google.com/"
+RESULTS_SELECTOR = 'div#search a'
+SEARCH_BOX_SELECTOR = 'input[name="q"]'
+TIMEOUT = 10
+
 def main():
-    # Setup Chrome options for headless execution (suitable for CI)
+    # Set up Chrome options for headless execution (GitHub CI compatible)
     chrome_options = Options()
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--window-size=1920,1080')
 
-    # Initialize the WebDriver
+    driver = webdriver.Chrome(options=chrome_options)
     try:
-        driver = webdriver.Chrome(options=chrome_options)
-    except Exception as e:
-        print(f"Error initializing Chrome WebDriver: {e}")
-        sys.exit(1)
+        # Open Google
+        driver.get(GOOGLE_URL)
 
-    try:
-        # Step 1: Open Google
-        driver.get('https://www.google.com')
-        WebDriverWait(driver, 10).until(EC.title_contains("Google"))
-        assert "Google" in driver.title, "Google homepage did not load properly."
-        print("Opened Google homepage successfully.")
-
-        # Step 2: Find the search box and search for 'selenium'
+        # Wait for the search box to be present
         try:
-            search_box = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.NAME, "q"))
+            search_box = WebDriverWait(driver, TIMEOUT).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, SEARCH_BOX_SELECTOR))
             )
         except TimeoutException:
-            print("Search box not found within the timeout period.")
+            print("Search box not found within timeout.")
             sys.exit(1)
+
+        # Enter the search term and submit
         search_box.clear()
-        search_box.send_keys("selenium")
+        search_box.send_keys(SEARCH_TERM)
         search_box.send_keys(Keys.RETURN)
 
-        # Step 3: Wait for results to load and collect URLs
+        # Wait for the results to load
         try:
-            results = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div#search a'))
+            WebDriverWait(driver, TIMEOUT).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, RESULTS_SELECTOR))
             )
         except TimeoutException:
             print("Search results did not load in time.")
             sys.exit(1)
 
-        # Filter out only valid result URLs (skip navigation, etc.)
-        result_urls = []
-        for elem in results:
-            href = elem.get_attribute('href')
-            if href and href.startswith('http') and 'google.com' not in href:
-                result_urls.append(href)
-            if len(result_urls) == 10:
+        # Assert the search box contains the search term after submission
+        try:
+            search_box_after = driver.find_element(By.CSS_SELECTOR, SEARCH_BOX_SELECTOR)
+            assert search_box_after.get_attribute('value').lower() == SEARCH_TERM.lower(), (
+                f"Search box does not contain the expected term: {SEARCH_TERM}"
+            )
+        except (NoSuchElementException, AssertionError) as e:
+            print(f"Assertion failed: {e}")
+            sys.exit(1)
+
+        # Get the first ten URLs from the search results
+        links = driver.find_elements(By.CSS_SELECTOR, RESULTS_SELECTOR)
+        urls = []
+        for link in links:
+            href = link.get_attribute('href')
+            # Filter out non-result links (e.g., images, navigation)
+            if href and href.startswith('http'):
+                urls.append(href)
+            if len(urls) == 10:
                 break
 
-        # Step 4: Assertions
-        assert len(result_urls) >= 10, f"Expected at least 10 results, got {len(result_urls)}."
+        # Assert that at least ten results are present
+        assert len(urls) == 10, f"Expected at least 10 results, got {len(urls)}"
 
-        # Step 5: Print the first ten result URLs
-        print("First 10 search result URLs for 'selenium':")
-        for idx, url in enumerate(result_urls, 1):
-            print(f"{idx}: {url}")
+        # Print the first ten URLs
+        print("First ten search result URLs:")
+        for i, url in enumerate(urls, 1):
+            print(f"{i}: {url}")
 
-    except AssertionError as ae:
-        print(f"Assertion failed: {ae}")
-        sys.exit(1)
-    except NoSuchElementException as ne:
-        print(f"Element not found: {ne}")
-        sys.exit(1)
-    except TimeoutException as te:
-        print(f"Timeout occurred: {te}")
-        sys.exit(1)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An error occurred: {e}")
         sys.exit(1)
     finally:
-        # Step 8: Properly close the browser
+        # Properly close the browser
         driver.quit()
-        print("Browser closed.")
 
 if __name__ == "__main__":
     main()
