@@ -1,25 +1,29 @@
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-import time
+from selenium.common.exceptions import WebDriverException, NoSuchElementException
 
 def main():
-    # Setup Chrome options for headless execution (GitHub CI compatible)
+    # Configure Chrome options for headless mode (for CI/CD compatibility)
     chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-    # Initialize the WebDriver
-    driver = webdriver.Chrome(options=chrome_options)
+    # Initialize WebDriver
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+    except WebDriverException as e:
+        print(f"Error initializing Chrome WebDriver: {e}")
+        return
 
     try:
-        # Navigate to Google
-        driver.get('https://www.google.com')
+        # Open Google
+        driver.get("https://www.google.com")
+        time.sleep(2)  # Wait for the page to load
 
-        # Accept cookies if the consent form appears (common in CI environments)
+        # Accept cookies if the consent form appears (for EU users)
         try:
             consent_button = driver.find_element(By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all')]")
             consent_button.click()
@@ -27,37 +31,31 @@ def main():
         except NoSuchElementException:
             pass  # Consent form did not appear
 
-        # Find the search box, enter 'selenium', and submit the search
-        search_box = driver.find_element(By.NAME, 'q')
-        search_box.send_keys('selenium')
-        search_box.send_keys(Keys.RETURN)
+        # Find the search box, enter 'selenium', and submit
+        search_box = driver.find_element(By.NAME, "q")
+        search_box.send_keys("selenium")
+        search_box.submit()
+        time.sleep(2)  # Wait for results to load
 
-        # Wait for results to load
-        time.sleep(2)
+        # Extract the first ten result URLs
+        results = driver.find_elements(By.XPATH, "//div[@class='g']//a[@href]")
+        urls = []
+        for result in results:
+            href = result.get_attribute("href")
+            if href and href.startswith("http"):
+                urls.append(href)
+            if len(urls) == 10:
+                break
 
-        # Find search result links and print the first ten URLs
-        results = driver.find_elements(By.XPATH, "//div[@class='g']//a")
-        printed = set()
-        count = 0
-        for link in results:
-            url = link.get_attribute('href')
-            # Filter out duplicate and non-result links
-            if url and url.startswith('http') and url not in printed:
-                print(url)
-                printed.add(url)
-                count += 1
-                if count == 10:
-                    break
+        # Print the URLs
+        print("First ten Google search result URLs for 'selenium':")
+        for url in urls:
+            print(url)
 
-        if count < 10:
-            print(f"Only found {count} result URLs.")
-
-    except (NoSuchElementException, TimeoutException) as e:
-        print(f"Element not found or timeout occurred: {e}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred during the search: {e}")
     finally:
-        # Cleanup: Close the browser
+        # Ensure the WebDriver is properly closed
         driver.quit()
 
 if __name__ == "__main__":
