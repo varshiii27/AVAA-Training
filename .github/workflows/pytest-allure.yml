@@ -1,4 +1,4 @@
-name: Pytest with Allure Reporting
+name: Pytest Selenium with Allure
 
 on:
   push:
@@ -9,36 +9,54 @@ on:
       - main
 
 jobs:
-  test:
+  selenium-tests:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set Up Python 3.11
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
-          pip install pytest allure-pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements.txt ]
+          then
+            echo "requirements.txt found, installing dependencies from requirements.txt"
+            pip install -r requirements.txt
+            pip install allure-pytest
+          else
+            echo "requirements.txt not found, installing default dependencies"
+            pip install selenium webdriver-manager allure-pytest
+          fi
 
-      - name: Run Pytest with Allure results
-        run: pytest test_google_search.py --alluredir=./allure-results
+      - name: Install Allure Commandline
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-11-jre
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          tar -xzf allure-2.27.0.tgz
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+          allure --version
 
-      - name: Upload Allure results
+      - name: Run Selenium Tests with Allure
+        run: |
+          pytest --alluredir=allure-results test.py
+
+      - name: Generate Allure Report
+        run: |
+          allure generate --clean allure-results -o allure-report
+
+      - name: Upload Allure Report
         uses: actions/upload-artifact@v4
         with:
-          name: allure-results
-          path: allure-results
+          name: allure-report
+          path: allure-report
 
-      - name: Upload screenshots (if any)
+      - name: Upload Screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
