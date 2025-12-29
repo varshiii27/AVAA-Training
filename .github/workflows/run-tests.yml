@@ -14,7 +14,7 @@ jobs:
       SCREENSHOTS_DIR: screenshots
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -31,14 +31,14 @@ jobs:
         run: pytest tests --alluredir=${{ env.ALLURE_RESULTS_DIR }}
 
       - name: Upload Allure results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: ${{ env.ALLURE_RESULTS_DIR }}
 
       - name: Upload screenshots
         if: success() || failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: screenshots
           path: ${{ env.SCREENSHOTS_DIR }}
