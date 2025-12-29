@@ -1,0 +1,111 @@
+project_root/
+├── pages/
+│   └── google_search_page.py
+├── tests/
+│   ├── conftest.py
+│   └── test_google_search.py
+├── utils/
+│   └── __init__.py
+└── reports/
+
+
+# pages/google_search_page.py
+import time
+import allure
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+
+class GoogleSearchPage:
+    URL = "https://www.google.com"
+
+    def __init__(self, driver):
+        self.driver = driver
+
+    @allure.step("Open Google homepage")
+    def open(self):
+        self.driver.get(self.URL)
+
+    @allure.step("Accept cookies if prompt appears")
+    def accept_cookies(self):
+        try:
+            consent_button = self.driver.find_element(
+                By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all')]"
+            )
+            consent_button.click()
+            time.sleep(1)
+        except NoSuchElementException:
+            pass
+
+    @allure.step("Search for '{1}'")
+    def search(self, query):
+        search_box = self.driver.find_element(By.NAME, "q")
+        assert search_box.is_displayed(), "Search box is not visible."
+        search_box.send_keys(query)
+        search_box.submit()
+        time.sleep(2)  # For demo; in real code, use WebDriverWait
+
+    @allure.step("Get search result links")
+    def get_result_links(self):
+        results = self.driver.find_elements(By.CSS_SELECTOR, "div.g a")
+        links = []
+        for result in results:
+            href = result.get_attribute("href")
+            if href and href.startswith("http"):
+                links.append(href)
+            if len(links) == 10:
+                break
+        return links
+
+# tests/conftest.py
+import pytest
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+@pytest.fixture(scope="function")
+def browser():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.set_page_load_timeout(30)
+    yield driver
+    driver.quit()
+
+# tests/test_google_search.py
+import allure
+from pages.google_search_page import GoogleSearchPage
+
+@allure.feature("Google Search")
+@allure.story("Search for 'selenium' and verify results")
+def test_google_search(browser):
+    page = GoogleSearchPage(browser)
+
+    page.open()
+    assert "Google" in browser.title, "Google homepage did not load properly."
+
+    page.accept_cookies()
+    page.search("selenium")
+    links = page.get_result_links()
+
+    with allure.step("Assert that 10 search results are found"):
+        assert len(links) == 10, f"Expected 10 results, but found {len(links)}."
+
+    with allure.step("Print the top 10 search result URLs"):
+        for idx, link in enumerate(links, 1):
+            print(f"{idx}: {link}")
+
+# utils/__init__.py
+# (empty or add utility functions as needed)
+
+# Installation Commands
+# python -m venv venv
+# source venv/bin/activate  # On Windows: venv\Scripts\activate
+# pip install selenium pytest allure-pytest
+
+# Execution Commands
+# pytest --alluredir=reports/
+# allure generate reports/ -o reports/html --clean
+# allure open reports/html
