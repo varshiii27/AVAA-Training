@@ -22,15 +22,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest selenium allure-pytest
 
-      - name: Setup Google Chrome
+      - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
 
-      - name: Run Specific Test File with Allure
+      - name: Run Test File with Allure
         run: |
           pytest test_python_script_pytest2.py --alluredir=allure-results
 
-      - name: Generate Allure HTML Report
-        uses: simple-elf/allure-report-action@v1
+      - name: Generate Allure Report
+        uses: simple-elf/allure-report-action@master
         with:
           allure_results: allure-results
           allure_report: allure-report
@@ -47,11 +47,3 @@ jobs:
         with:
           name: allure-report
           path: allure-report
-
-      - name: Upload Screenshots (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: screenshots
-          if-no-files-found: ignore
