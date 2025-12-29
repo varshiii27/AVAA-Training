@@ -1,73 +1,89 @@
-# test_google_search.py
-# This script uses Selenium to automate Google search, print the first ten result URLs, and includes assertions and error handling.
-
+import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
-import time
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
+@pytest.fixture(scope="session")
+def chrome_options():
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-dev-shm-usage')
+    return options
 
-def main():
-    # Configure Chrome options for headless execution (for CI/CD compatibility)
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--disable-dev-shm-usage')
+@pytest.fixture(scope="function")
+def driver(chrome_options):
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.set_page_load_timeout(30)
+    yield driver
+    driver.quit()
 
-    driver = None
-    try:
-        # Initialize the WebDriver
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(30)
+@pytest.fixture(scope="function")
+def open_google(driver):
+    driver.get('https://www.google.com')
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, 'q'))
+    )
+    return driver
 
-        # Step 1: Open Google
-        driver.get('https://www.google.com')
-        time.sleep(2)  # Wait for the page to load
+def test_google_homepage_title(open_google):
+    driver = open_google
+    assert "Google" in driver.title
 
-        # Step 2: Assert that the search box is present
-        try:
-            search_box = driver.find_element(By.NAME, 'q')
-        except NoSuchElementException:
-            raise AssertionError('Search box not found on Google homepage.')
-        assert search_box.is_displayed(), 'Search box is not visible.'
+def test_search_box_visible(open_google):
+    driver = open_google
+    search_box = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.NAME, 'q'))
+    )
+    assert search_box.is_displayed()
 
-        # Step 3: Search for 'selenium'
-        search_box.clear()
-        search_box.send_keys('selenium')
-        search_box.send_keys(Keys.RETURN)
-        time.sleep(2)  # Wait for results to load
+def test_google_search_results(driver):
+    driver.get('https://www.google.com')
+    search_box = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.NAME, 'q'))
+    )
+    search_box.clear()
+    search_box.send_keys('selenium')
+    search_box.send_keys(Keys.RETURN)
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, 'search'))
+    )
+    results = driver.find_elements(By.CSS_SELECTOR, 'div#search a')
+    urls = []
+    seen = set()
+    for elem in results:
+        href = elem.get_attribute('href')
+        if href and href.startswith('http') and href not in seen:
+            urls.append(href)
+            seen.add(href)
+        if len(urls) == 10:
+            break
+    assert len(urls) >= 10, f'Expected at least 10 search results, found {len(urls)}.'
 
-        # Step 4: Find search results and assert at least 10 are present
-        results = driver.find_elements(By.CSS_SELECTOR, 'div#search a')
-        # Filter only unique hrefs and skip non-result links
-        urls = []
-        seen = set()
-        for elem in results:
-            href = elem.get_attribute('href')
-            if href and href.startswith('http') and href not in seen:
-                urls.append(href)
-                seen.add(href)
-            if len(urls) == 10:
-                break
-
-        assert len(urls) >= 10, f'Expected at least 10 search results, found {len(urls)}.'
-
-        # Step 5: Print the first ten URLs
-        print('First ten URLs from Google search results for "selenium":')
-        for i, url in enumerate(urls, 1):
-            print(f'{i}: {url}')
-
-    except (AssertionError, NoSuchElementException, TimeoutException, WebDriverException) as e:
-        print(f'Error occurred: {e}')
-    finally:
-        # Properly close the WebDriver
-        if driver:
-            driver.quit()
-
-
-if __name__ == "__main__":
-    main()
+def test_first_result_url_is_valid(driver):
+    driver.get('https://www.google.com')
+    search_box = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.NAME, 'q'))
+    )
+    search_box.clear()
+    search_box.send_keys('selenium')
+    search_box.send_keys(Keys.RETURN)
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, 'search'))
+    )
+    results = driver.find_elements(By.CSS_SELECTOR, 'div#search a')
+    urls = []
+    seen = set()
+    for elem in results:
+        href = elem.get_attribute('href')
+        if href and href.startswith('http') and href not in seen:
+            urls.append(href)
+            seen.add(href)
+        if len(urls) == 10:
+            break
+    assert urls[0].startswith('http')
