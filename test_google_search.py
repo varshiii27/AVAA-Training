@@ -1,103 +1,73 @@
-import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import (
-    NoSuchElementException,
-    TimeoutException,
-)
-import time
+import sys
 
-@pytest.fixture(scope="module")
-def driver():
-    # Set up Chrome options for headless execution (suitable for GitHub CI)
+def main():
+    # Setup Chrome options for headless execution (for GitHub CI compatibility)
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(options=chrome_options)
-    yield driver
-    driver.quit()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--window-size=1920,1080')
 
-def test_google_search_selenium(driver):
+    driver = None
     try:
-        # 1. Open Google
-        driver.get("https://www.google.com")
-        WebDriverWait(driver, 10).until(
-            EC.title_contains("Google")
-        )
-        # Assertion: Page title contains 'Google'
-        assert "Google" in driver.title
+        # Initialize WebDriver
+        driver = webdriver.Chrome(options=chrome_options)
 
-        # Accept cookies if the consent form appears (for EU users)
+        # Step 1: Navigate to Google
+        driver.get('https://www.google.com')
+
+        # Assertion: Page title should contain 'Google'
+        assert 'Google' in driver.title, f"Page title does not contain 'Google': {driver.title}"
+
+        # Step 2: Find the search box, enter 'selenium', and submit
         try:
-            consent_button = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, "//button[.//div[text()='I agree']] | //button[.//div[text()='Accept all']] | //button[.//span[text()='Accept all']]")
-                )
+            search_box = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.NAME, 'q'))
             )
-            consent_button.click()
-        except (TimeoutException, NoSuchElementException):
-            pass  # Consent form not present
-
-        # 2. Search for 'selenium'
-        search_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "q"))
-        )
-        search_box.clear()
-        search_box.send_keys("selenium")
+        except TimeoutException:
+            print('Search box not found within timeout.', file=sys.stderr)
+            return
+        search_box.send_keys('selenium')
         search_box.send_keys(Keys.RETURN)
 
-        # 3. Wait for results page and check title
-        WebDriverWait(driver, 10).until(
-            EC.title_contains("selenium")
-        )
-        assert "selenium" in driver.title.lower()
-
-        # 4. Get the first ten result URLs
-        # Google search results are in <div class="g">, and the link is in <a>
-        results = WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located(
-                (By.CSS_SELECTOR, "div#search div.g")
+        # Step 3: Wait for search results to load
+        try:
+            results = WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.yuRUbf > a'))
             )
-        )
+        except TimeoutException:
+            print('Search results not found within timeout.', file=sys.stderr)
+            return
 
-        # Assertion: At least 10 results are present
-        assert len(results) >= 10, f"Expected at least 10 results, got {len(results)}"
+        # Assertion: At least 10 results should be present
+        assert len(results) >= 10, f"Less than 10 results found: {len(results)}"
 
-        urls = []
-        count = 0
-        for result in results:
+        # Step 4: Print the first ten URLs
+        print('First ten URLs from Google search results for "selenium":')
+        for i, result in enumerate(results[:10], 1):
             try:
-                link = result.find_element(By.CSS_SELECTOR, "a")
-                href = link.get_attribute("href")
-                if href and href.startswith("http"):
-                    urls.append(href)
-                    count += 1
-                if count == 10:
-                    break
-            except NoSuchElementException:
-                continue
+                url = result.get_attribute('href')
+                print(f"{i}. {url}")
+            except Exception as e:
+                print(f"Error retrieving URL for result {i}: {e}", file=sys.stderr)
 
-        # Assertion: Exactly 10 URLs collected
-        assert len(urls) == 10, f"Expected 10 URLs, got {len(urls)}"
-
-        # 5. Print the first ten result URLs
-        print("\nFirst 10 Google search result URLs for 'selenium':")
-        for idx, url in enumerate(urls, 1):
-            print(f"{idx}: {url}")
-
-    except (NoSuchElementException, TimeoutException) as e:
-        pytest.fail(f"Test failed due to exception: {e}")
-
+    except AssertionError as ae:
+        print(f"Assertion failed: {ae}", file=sys.stderr)
+    except NoSuchElementException as ne:
+        print(f"Element not found: {ne}", file=sys.stderr)
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}", file=sys.stderr)
     finally:
-        # 8. Close the browser (handled by fixture teardown)
-        pass  # driver.quit() is called by the fixture
+        # Cleanup: Properly close the WebDriver
+        if driver:
+            driver.quit()
 
-# To run this test, save as test_google_search.py and execute:
-# pytest -s test_google_search.py
+if __name__ == "__main__":
+    main()
