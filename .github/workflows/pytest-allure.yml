@@ -44,7 +44,7 @@ jobs:
 
       - name: Run Selenium Tests with Allure
         run: |
-          pytest test_google_search.py --alluredir=allure-results test.py
+          pytest test_google_search.py --alluredir=allure-results
 
       - name: Generate Allure Report
         run: |
