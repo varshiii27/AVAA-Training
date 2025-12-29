@@ -1,0 +1,1 @@
+aW1wb3J0IHN5cwp... (base64-encoded content of the first script)
