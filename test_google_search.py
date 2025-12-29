@@ -1,15 +1,3 @@
-# test_google_search.py
-
-"""
-Automated script using Selenium to:
-- Open Google
-- Search for 'selenium'
-- Print the first ten URLs from the search results
-- Include assertions wherever possible
-- Use ChromeOptions for headless execution (CI/CD compatible)
-- Include error handling, comments, and proper cleanup
-"""
-
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -17,9 +5,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 import time
 
-
 def main():
-    # Set up Chrome options for headless execution (for CI/CD compatibility)
+    # Setup Chrome options for headless execution (for GitHub CI compatibility)
     chrome_options = Options()
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
@@ -65,7 +52,6 @@ def main():
         # Proper cleanup: close the browser
         if driver:
             driver.quit()
-
 
 if __name__ == "__main__":
     main()
