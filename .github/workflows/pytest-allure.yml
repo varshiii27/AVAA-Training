@@ -24,13 +24,13 @@ jobs:
       - name: Run tests with Pytest
         run: pytest test_python_pytest_script.py --alluredir=./allure-results
       - name: Upload Allure results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: ./allure-results
       - name: Upload screenshots
         if: success() || failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: screenshots
           path: ./screenshots
