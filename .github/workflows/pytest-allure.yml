@@ -1,15 +1,14 @@
-name: Selenium Allure Workflow
+name: Pytest Selenium with Allure
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  selenium-tests:
+  test:
     runs-on: ubuntu-latest
-    name: selenium-tests
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -17,44 +16,54 @@ jobs:
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
             pip install selenium webdriver-manager pytest allure-pytest
           fi
 
-      - name: Run Selenium tests with pytest (Allure results)
-        run: pytest test_google_search.py --alluredir=allure-results
-        continue-on-error: true
+      - name: Run Pytest with Allure results (continue on error)
+        run: |
+          pytest test_script.py --alluredir=allure-results || true
 
       - name: Add Allure executor info
         run: |
           mkdir -p allure-results
           echo '{
-            "name": "${{ github.workflow }}",
+            "name": "GitHub Actions",
             "type": "github",
-            "buildName": "${{ github.run_number }}",
-            "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "buildOrder": 1,
+            "buildName": "${{ github.workflow }}",
+            "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportUrl": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
           }' > allure-results/executor.json
 
-      - name: Install Allure CLI v2.27.0
+      - name: Set up Java for Allure CLI
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Allure CLI
         run: |
           wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
           tar -xzf allure-2.27.0.tgz
-          sudo mv allure-2.27.0/bin/allure /usr/bin/allure
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
 
       - name: Generate Allure report
-        run: allure generate allure-results --clean -o allure-report
+        run: |
+          allure generate allure-results --clean -o allure-report
 
       - name: Prepare Allure report for GitHub Pages
-        run: touch allure-report/.nojekyll
+        run: |
+          touch allure-report/.nojekyll
 
       - name: Upload Allure report artifact
         uses: actions/upload-artifact@v4
@@ -62,23 +71,22 @@ jobs:
           name: allure-report
           path: allure-report
 
-      - name: Upload screenshots artifact (if any)
+      - name: Upload screenshots artifact
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
           path: screenshots
-        if: ${{ exists('screenshots') }}
 
       - name: Ensure Allure report exists
         run: |
-          if [ ! -f allure-report/index.html ]; then
-            echo "Allure report index.html not found!"
+          if [ ! -d "allure-report" ] || [ ! "$(ls -A allure-report)" ]; then
+            echo "Allure report was not generated!"
             exit 1
           fi
 
       - name: Deploy Allure report to GitHub Pages
+        if: github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report
-          publish_branch: gh-pages
+          publish_dir: ./allure-report
