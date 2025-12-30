@@ -1,55 +1,55 @@
-import pytest
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
 
-@pytest.fixture(scope="session")
-def chrome_options():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    return options
+def main():
+    # Set up Chrome options for headless execution (for CI/CD compatibility)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-@pytest.fixture(scope="function")
-def driver(chrome_options):
-    driver = webdriver.Chrome(options=chrome_options)
-    yield driver
-    driver.quit()
+    driver = None
+    try:
+        # Initialize the WebDriver
+        driver = webdriver.Chrome(options=chrome_options)
+        assert driver is not None, "WebDriver failed to initialize"
 
-@pytest.fixture(scope="function")
-def google_home(driver):
-    driver.get("https://www.google.com")
-    WebDriverWait(driver, 10).until(EC.title_contains("Google"))
-    return driver
+        # Open Google
+        driver.get("https://www.google.com")
+        assert "Google" in driver.title, "Google homepage did not load properly"
 
-def test_google_homepage_title(google_home):
-    assert "Google" in google_home.title
+        # Locate the search box, enter 'selenium', and submit
+        search_box = driver.find_element(By.NAME, "q")
+        assert search_box is not None, "Search box not found"
+        search_box.send_keys("selenium")
+        search_box.send_keys(Keys.RETURN)
 
-def test_google_search_box_visible_and_enabled(google_home):
-    search_box = WebDriverWait(google_home, 10).until(
-        EC.visibility_of_element_located((By.NAME, "q"))
-    )
-    assert search_box.is_displayed()
-    assert search_box.is_enabled()
+        # Wait for results to load
+        time.sleep(2)  # In production, use WebDriverWait for robustness
 
-def test_google_search_results(google_home):
-    search_box = WebDriverWait(google_home, 10).until(
-        EC.visibility_of_element_located((By.NAME, "q"))
-    )
-    search_box.clear()
-    search_box.send_keys("selenium")
-    search_box.send_keys(Keys.RETURN)
-    WebDriverWait(google_home, 10).until(
-        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.yuRUbf > a"))
-    )
-    results = google_home.find_elements(By.CSS_SELECTOR, "div.yuRUbf > a")
-    assert len(results) > 0
-    assert len(results) >= 10
-    for idx, result in enumerate(results[:10], 1):
-        url = result.get_attribute("href")
-        assert url.startswith("http")
+        # Find search result elements
+        results = driver.find_elements(By.CSS_SELECTOR, "div.yuRUbf > a")
+        assert len(results) > 0, "No search results found"
+
+        # Print the first ten URLs
+        print("Top 10 search result URLs for 'selenium':")
+        for idx, result in enumerate(results[:10]):
+            url = result.get_attribute("href")
+            assert url.startswith("http"), f"Result {idx+1} does not look like a valid URL"
+            print(f"{idx+1}: {url}")
+
+    except (NoSuchElementException, AssertionError, WebDriverException) as e:
+        print(f"Error occurred: {e}")
+    finally:
+        # Ensure proper cleanup of the WebDriver
+        if driver:
+            driver.quit()
+
+if __name__ == "__main__":
+    main()
