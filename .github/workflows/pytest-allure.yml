@@ -56,14 +56,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install latest Allure CLI
+      - name: Install Allure CLI
         run: |
-          ALLURE_LATEST_URL=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep "browser_download_url.*allure-.*.tgz" | cut -d '"' -f 4)
-          curl -L $ALLURE_LATEST_URL -o allure.tgz
-          tar -xzf allure.tgz
-          sudo mv allure-* /opt/allure
+          LATEST=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep tag_name | cut -d '"' -f 4)
+          echo "Latest Allure version: $LATEST"
+
+          wget https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.tgz
+          tar -xzf allure-$LATEST.tgz
+      
+          sudo mkdir -p /opt/allure
+          sudo mv allure-$LATEST/* /opt/allure/
+      
           sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure
+      
           allure --version
+
 
       - name: Generate Allure report
         run: |
