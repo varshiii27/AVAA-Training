@@ -1,17 +1,13 @@
-name: Pytest with Allure Reporting
+name: Pytest Allure Workflow
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    env:
-      ALLURE_VERSION: latest
 
     steps:
       - name: Checkout repository
@@ -20,12 +16,13 @@ jobs:
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.10'
 
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
       - name: Install dependencies (requirements.txt or default)
+        id: install-deps
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -35,42 +32,57 @@ jobs:
 
       - name: Run Pytest with Allure results
         run: |
-          pytest test_google_search.py --alluredir=allure-results || true
+          pytest test_script.py --alluredir=allure-results || true
 
       - name: Add Allure executor info
         run: |
           mkdir -p allure-results
-          echo '{
+          cat > allure-results/executor.json <<EOF
+          {
             "name": "GitHub Actions",
             "type": "github",
             "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "buildOrder": 1,
-            "buildName": "${{ github.workflow }}",
+            "buildOrder": "${{ github.run_number }}",
+            "buildName": "${{ github.workflow }} #${{ github.run_number }}",
             "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "reportUrl": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          }' > allure-results/executor.json
+            "reportUrl": ""
+          }
+          EOF
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Install Allure CLI
+      - name: Install Allure CLI (latest, robust)
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep tag_name | cut -d '"' -f 4)
-          echo "Latest Allure version: $LATEST"
-
-          wget https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.tgz
-          tar -xzf allure-$LATEST.tgz
-      
-          sudo mkdir -p /opt/allure
-          sudo mv allure-$LATEST/* /opt/allure/
-      
-          sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure
-      
-          allure --version
-
+          set -euo pipefail
+          function error_exit {
+            echo "Error: $1" >&2
+            exit 1
+          }
+          if ! command -v java &>/dev/null; then
+            echo "Java not found. Installing OpenJDK..."
+            sudo apt-get update -y || error_exit "Failed to update apt-get"
+            sudo apt-get install -y openjdk-11-jre-headless || error_exit "Failed to install Java"
+          else
+            echo "Java is already installed."
+          fi
+          ALLURE_LATEST_TAG=$(curl -fsSL https://api.github.com/repos/allure-framework/allure2/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || error_exit "Failed to fetch latest Allure release tag"
+          echo "Latest Allure release: $ALLURE_LATEST_TAG"
+          ALLURE_URL="https://github.com/allure-framework/allure2/releases/download/${ALLURE_LATEST_TAG}/allure-${ALLURE_LATEST_TAG#v}.tgz"
+          TMP_DIR=$(mktemp -d)
+          ARCHIVE_PATH="$TMP_DIR/allure.tgz"
+          echo "Downloading Allure from $ALLURE_URL"
+          curl -fsSL "$ALLURE_URL" -o "$ARCHIVE_PATH" || error_exit "Failed to download Allure archive"
+          tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR" || error_exit "Failed to extract Allure archive"
+          sudo rm -rf /opt/allure || error_exit "Failed to remove existing /opt/allure"
+          sudo mkdir -p /opt/allure || error_exit "Failed to create /opt/allure"
+          EXTRACTED_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "allure-*" | head -n 1)
+          sudo mv "$EXTRACTED_DIR"/* /opt/allure/ || error_exit "Failed to move Allure files to /opt/allure"
+          sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure || error_exit "Failed to create symlink for Allure"
+          rm -rf "$TMP_DIR"
+          if ! command -v allure &>/dev/null; then
+            error_exit "Allure CLI is not in PATH"
+          fi
+          echo "Allure CLI version:"
+          allure --version || error_exit "Allure CLI failed to run"
+          echo "Allure CLI installed successfully."
 
       - name: Generate Allure report
         run: |
@@ -96,22 +108,15 @@ jobs:
 
       - name: Fail if Allure report does not exist
         run: |
-          if [ ! -d "allure-report" ] || [ -z "$(ls -A allure-report)" ]; then
+          if [ ! -d "allure-report" ] || [ ! -f "allure-report/index.html" ]; then
             echo "Allure report was not generated!"
             exit 1
           fi
 
-      # OPTIONAL: Deploy Allure report to GitHub Pages
-      # Uncomment and configure the following step if you want to deploy the report.
-      # Replace <OWNER> and <REPO> with your GitHub username/org and repository name.
-
-      # - name: Deploy Allure report to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@v3
-      #   if: github.ref == 'refs/heads/main'
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     publish_dir: ./allure-report
-      #     publish_branch: gh-pages
-      #     user_name: github-actions[bot]
-      #     user_email: github-actions[bot]@users.noreply.github.com
-      #     cname: ''
+      - name: Deploy Allure report to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          publish_branch: gh-pages
