@@ -1,0 +1,4 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","1120","test_google_homepage_title","","2025-12-30","passed","2025-12-30","","test_google_search","",""
+"","376","test_google_search_box_present","","2025-12-30","passed","2025-12-30","","test_google_search","",""
+"","10773","test_google_search_results","","2025-12-30","broken","2025-12-30","","test_google_search","",""
