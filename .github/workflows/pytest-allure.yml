@@ -30,7 +30,7 @@ jobs:
 
       - name: Run Pytest with Allure (continue on error)
         run: |
-          pytest test_script.py --alluredir=allure-results || true
+          pytest test_google_search.py --alluredir=allure-results || true
 
       - name: Add Allure executor info
         run: |
