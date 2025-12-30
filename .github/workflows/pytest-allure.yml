@@ -49,40 +49,22 @@ jobs:
           }
           EOF
 
-      - name: Install Allure CLI (latest, robust)
+      - name: Install Allure CLI
         run: |
-          set -euo pipefail
-          function error_exit {
-            echo "Error: $1" >&2
-            exit 1
-          }
-          if ! command -v java &>/dev/null; then
-            echo "Java not found. Installing OpenJDK..."
-            sudo apt-get update -y || error_exit "Failed to update apt-get"
-            sudo apt-get install -y openjdk-11-jre-headless || error_exit "Failed to install Java"
-          else
-            echo "Java is already installed."
-          fi
-          ALLURE_LATEST_TAG=$(curl -fsSL https://api.github.com/repos/allure-framework/allure2/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || error_exit "Failed to fetch latest Allure release tag"
-          echo "Latest Allure release: $ALLURE_LATEST_TAG"
-          ALLURE_URL="https://github.com/allure-framework/allure2/releases/download/${ALLURE_LATEST_TAG}/allure-${ALLURE_LATEST_TAG#v}.tgz"
-          TMP_DIR=$(mktemp -d)
-          ARCHIVE_PATH="$TMP_DIR/allure.tgz"
-          echo "Downloading Allure from $ALLURE_URL"
-          curl -fsSL "$ALLURE_URL" -o "$ARCHIVE_PATH" || error_exit "Failed to download Allure archive"
-          tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR" || error_exit "Failed to extract Allure archive"
-          sudo rm -rf /opt/allure || error_exit "Failed to remove existing /opt/allure"
-          sudo mkdir -p /opt/allure || error_exit "Failed to create /opt/allure"
-          EXTRACTED_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "allure-*" | head -n 1)
-          sudo mv "$EXTRACTED_DIR"/* /opt/allure/ || error_exit "Failed to move Allure files to /opt/allure"
-          sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure || error_exit "Failed to create symlink for Allure"
-          rm -rf "$TMP_DIR"
-          if ! command -v allure &>/dev/null; then
-            error_exit "Allure CLI is not in PATH"
-          fi
-          echo "Allure CLI version:"
-          allure --version || error_exit "Allure CLI failed to run"
-          echo "Allure CLI installed successfully."
+          sudo apt-get update
+          sudo apt-get install -y default-jre
+      
+          LATEST=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep tag_name | cut -d '"' -f 4)
+          echo "Latest Allure version: $LATEST"
+      
+          wget https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.tgz
+          tar -xzf allure-$LATEST.tgz
+      
+          sudo mkdir -p /opt/allure
+          sudo mv allure-$LATEST/* /opt/allure
+          sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure
+      
+          allure --version
 
       - name: Generate Allure report
         run: |
