@@ -54,10 +54,15 @@ jobs:
         run: |
           LATEST=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep tag_name | cut -d '"' -f 4)
           echo "Latest Allure version: $LATEST"
+
           wget https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.tgz
           tar -xzf allure-$LATEST.tgz
-          sudo mv allure-$LATEST/bin/allure /usr/local/bin/allure
+
+          sudo mv allure-$LATEST /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
+
           allure --version
+
 
       - name: Generate Allure report
         run: |
