@@ -39,7 +39,7 @@ jobs:
 
       - name: Run Pytest with Allure
         run: |
-          pytest --alluredir=allure-results --capture=tee-sys
+          pytest test_google_search.py --alluredir=allure-results --capture=tee-sys
 
       - name: Generate Allure Report
         if: always()
