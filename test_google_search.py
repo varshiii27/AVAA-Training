@@ -1,55 +1,55 @@
-import time
+import pytest
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import NoSuchElementException, WebDriverException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-def main():
-    # Set up Chrome options for headless execution (for CI/CD compatibility)
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+@pytest.fixture(scope="session")
+def chrome_options():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-dev-shm-usage")
+    return options
 
-    driver = None
-    try:
-        # Initialize the WebDriver
-        driver = webdriver.Chrome(options=chrome_options)
-        assert driver is not None, "WebDriver failed to initialize"
+@pytest.fixture(scope="function")
+def driver(chrome_options):
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.set_page_load_timeout(30)
+    yield driver
+    driver.quit()
 
-        # Open Google
-        driver.get("https://www.google.com")
-        assert "Google" in driver.title, "Google homepage did not load properly"
+@pytest.mark.usefixtures("driver")
+def test_google_homepage_title(driver):
+    driver.get("https://www.google.com")
+    assert "Google" in driver.title
 
-        # Locate the search box, enter 'selenium', and submit
-        search_box = driver.find_element(By.NAME, "q")
-        assert search_box is not None, "Search box not found"
-        search_box.send_keys("selenium")
-        search_box.send_keys(Keys.RETURN)
+@pytest.mark.usefixtures("driver")
+def test_google_search_box_present(driver):
+    driver.get("https://www.google.com")
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, "q"))
+    )
+    assert search_box is not None
 
-        # Wait for results to load
-        time.sleep(2)  # In production, use WebDriverWait for robustness
-
-        # Find search result elements
-        results = driver.find_elements(By.CSS_SELECTOR, "div.yuRUbf > a")
-        assert len(results) > 0, "No search results found"
-
-        # Print the first ten URLs
-        print("Top 10 search result URLs for 'selenium':")
-        for idx, result in enumerate(results[:10]):
-            url = result.get_attribute("href")
-            assert url.startswith("http"), f"Result {idx+1} does not look like a valid URL"
-            print(f"{idx+1}: {url}")
-
-    except (NoSuchElementException, AssertionError, WebDriverException) as e:
-        print(f"Error occurred: {e}")
-    finally:
-        # Ensure proper cleanup of the WebDriver
-        if driver:
-            driver.quit()
-
-if __name__ == "__main__":
-    main()
+@pytest.mark.usefixtures("driver")
+def test_google_search_results(driver):
+    driver.get("https://www.google.com")
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, "q"))
+    )
+    search_box.clear()
+    search_box.send_keys("selenium")
+    search_box.submit()
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.yuRUbf > a"))
+    )
+    results = driver.find_elements(By.CSS_SELECTOR, "div.yuRUbf > a")
+    assert len(results) > 0
+    for idx, result in enumerate(results[:10], 1):
+        url = result.get_attribute("href")
+        assert url is not None and url.startswith("http")
+    assert len(results) >= 10
