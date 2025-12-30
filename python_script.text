@@ -1,69 +1,88 @@
-import sys
-import time
+import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-def main():
-    # Set up Chrome options for headless execution (CI/CD compatibility)
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--window-size=1920,1080')
+@pytest.fixture(scope="session")
+def chrome_options():
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1920,1080')
+    return options
 
-    driver = None
+@pytest.fixture(scope="function")
+def driver(chrome_options):
+    driver = webdriver.Chrome(options=chrome_options)
+    yield driver
+    driver.quit()
+
+@pytest.fixture(scope="function")
+def open_google(driver):
+    driver.get('https://www.google.com')
+    WebDriverWait(driver, 10).until(EC.title_contains('Google'))
     try:
-        # Initialize the Chrome WebDriver
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(30)
+        consent_button = WebDriverWait(driver, 3).until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all') or contains(., 'Accept')]")
+        )
+        consent_button.click()
+    except TimeoutException:
+        pass
+    return driver
 
-        # Step 1: Open Google
-        driver.get('https://www.google.com')
-        assert 'Google' in driver.title, 'Google homepage did not load correctly.'
+def test_google_page_title(open_google):
+    driver = open_google
+    assert 'Google' in driver.title
 
-        # Accept cookies if the consent form appears
+def test_search_box_presence(open_google):
+    driver = open_google
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, 'q'))
+    )
+    assert search_box.is_displayed()
+
+def test_search_selenium_and_results(open_google):
+    driver = open_google
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, 'q'))
+    )
+    search_box.clear()
+    search_box.send_keys('selenium')
+    search_box.send_keys(Keys.RETURN)
+    WebDriverWait(driver, 10).until(EC.title_contains('selenium'))
+    results = WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.g'))
+    )
+    assert len(results) >= 10
+
+def test_first_ten_result_urls(open_google):
+    driver = open_google
+    search_box = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.NAME, 'q'))
+    )
+    search_box.clear()
+    search_box.send_keys('selenium')
+    search_box.send_keys(Keys.RETURN)
+    WebDriverWait(driver, 10).until(EC.title_contains('selenium'))
+    results = WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.g'))
+    )
+    urls = []
+    for result in results:
         try:
-            consent_button = driver.find_element(By.XPATH, "//button[contains(., 'I agree') or contains(., 'Accept all') or contains(., 'Accept')]")
-            consent_button.click()
-            time.sleep(1)
+            link = result.find_element(By.CSS_SELECTOR, 'a')
+            url = link.get_attribute('href')
+            if url:
+                urls.append(url)
+            if len(urls) == 10:
+                break
         except NoSuchElementException:
-            pass  # Consent button not present
-
-        # Step 2: Search for 'selenium'
-        search_box = driver.find_element(By.NAME, 'q')
-        search_box.clear()
-        search_box.send_keys('selenium')
-        search_box.submit()
-
-        # Wait for results to load
-        time.sleep(2)
-        assert 'selenium' in driver.title.lower(), 'Search results page did not load correctly.'
-
-        # Step 3: Print the first ten URLs from the search results
-        results = driver.find_elements(By.CSS_SELECTOR, 'div.yuRUbf > a')
-        assert len(results) >= 10, f'Expected at least 10 search results, found {len(results)}.'
-
-        print('Top 10 URLs for "selenium":')
-        for i, result in enumerate(results[:10], 1):
-            url = result.get_attribute('href')
-            assert url.startswith('http'), f'Result {i} does not have a valid URL.'
-            print(f'{i}: {url}')
-
-    except AssertionError as ae:
-        print(f'Assertion failed: {ae}', file=sys.stderr)
-        sys.exit(1)
-    except WebDriverException as we:
-        print(f'WebDriver error: {we}', file=sys.stderr)
-        sys.exit(2)
-    except Exception as e:
-        print(f'Unexpected error: {e}', file=sys.stderr)
-        sys.exit(3)
-    finally:
-        # Proper cleanup
-        if driver:
-            driver.quit()
-
-if __name__ == '__main__':
-    main()
+            continue
+    assert len(urls) == 10
+    for url in urls:
+        assert url.startswith('http')
