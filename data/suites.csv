@@ -1,0 +1,4 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","1147","test_google_page_title","","2026-01-05","passed","2026-01-05","","test_Google_Search","",""
+"","10651","test_google_search_results","","2026-01-05","broken","2026-01-05","","test_Google_Search","",""
+"","425","test_google_search_box_present","","2026-01-05","passed","2026-01-05","","test_Google_Search","",""
