@@ -27,7 +27,7 @@ jobs:
           fi
 
       - name: Run Pytest with Allure results
-        run: pytest test_google_search.py --alluredir=allure-results || true
+        run: pytest test_Google_Search.py --alluredir=allure-results || true
 
       - name: Create Allure executor info
         run: |
