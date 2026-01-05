@@ -1,4 +1,5 @@
 name: Pytest Selenium Allure CI
+
 on:
   push:
     branches: [main]
@@ -8,7 +9,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.10
@@ -28,22 +29,20 @@ jobs:
       - name: Run Pytest with Allure results
         run: pytest test_google_search.py --alluredir=allure-results || true
 
-      - name: Create Allure executor.json
+      - name: Create Allure executor info
         run: |
           mkdir -p allure-results
-          cat <<EOF > allure-results/executor.json
-          {
+          echo '{
             "name": "GitHub Actions",
             "type": "github",
             "url": "https://github.com/${{ github.repository }}",
             "buildOrder": 1,
-            "buildName": "${{ github.workflow }} #${{ github.run_number }}",
-            "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "reportUrl": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          }
-          EOF
+            "buildName": "${{ github.run_number }}",
+            "buildUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportUrl": "${{ github.server_url }}/${{ github.repository }}/pages/gh-pages/index.html"
+          }' > allure-results/executor.json
 
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -51,10 +50,10 @@ jobs:
 
       - name: Install Allure CLI
         run: |
-          LATEST_URL=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep "browser_download_url.*allure-.*.tgz" | cut -d '"' -f 4)
-          curl -L $LATEST_URL -o allure.tgz
-          sudo tar -zxvf allure.tgz -C /opt/
-          sudo mv /opt/allure-* /opt/allure
+          ALLURE_VERSION=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | grep tag_name | cut -d '"' -f4)
+          wget https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz
+          tar -zxvf allure-${ALLURE_VERSION}.tgz
+          sudo mv allure-${ALLURE_VERSION} /opt/allure
           sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure
           allure --version
 
@@ -80,13 +79,13 @@ jobs:
       - name: Ensure Allure report exists
         run: |
           if [ ! -f allure-report/index.html ]; then
-            echo "Allure report was not generated!"
+            echo "Allure report not found! Failing workflow."
             exit 1
           fi
 
       - name: Deploy Allure report to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
-        if: ${{ always() }}
+        if: github.ref == 'refs/heads/main'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
